@@ -84,6 +84,25 @@ export class EconetPipe {
 
   // ── Sending ───────────────────────────────────────────────────────────────
 
+  /** Send an AUN ACK for a received packet — uses the received packet's seq verbatim. */
+  sendAck(dststn: number, dstnet: number, port: number, ctrl: number, seq: number): void {
+    const header = Buffer.from([dststn, dstnet, 0x00, 0x00, ECONET_AUN_ACK, port, ctrl, 0x00]);
+    const seqBuf = Buffer.alloc(4);
+    seqBuf.writeUInt32LE(seq, 0);
+    const aunPkt   = Buffer.concat([header, seqBuf]);
+    const lenBuf   = Buffer.alloc(2);
+    lenBuf[0] = aunPkt.length & 0xff;
+    lenBuf[1] = (aunPkt.length >> 8) & 0xff;
+    fs.writeSync(this.writeFd, Buffer.concat([lenBuf, aunPkt]));
+    if (this.debugLog) {
+      this.debugLog('TX', {
+        dststn, dstnet, srcstn: 0, srcnet: 0,
+        aun_ttype: ECONET_AUN_ACK, port, ctrl, seq,
+        data: Buffer.alloc(0),
+      });
+    }
+  }
+
   send(pkt: Omit<AUNPacket, 'seq'>): void {
     this.seq += 4;
     const seqBuf = Buffer.alloc(4);

@@ -74,7 +74,7 @@ exports.FS_CTRL = 0x80;
 exports.REPLY_PORT = 0x90;
 exports.DATA_PORT = 0x92; // used for LOAD data
 exports.ACK_PORT = 0x91; // used for SAVE ack
-const TIMEOUT_MS = 20000;
+const TIMEOUT_MS = 10000;
 const FSLIST_TIMEOUT_MS = 5000;
 // ── Low-level helpers ─────────────────────────────────────────────────────────
 /** Build the standard 5-byte FS request header + payload. */
@@ -270,6 +270,8 @@ async function load(pipe, server, filename, handles) {
     sendToFs(pipe, server, txData);
     // First packet: metadata on REPLY_PORT
     const metaPkt = await pipe.waitForPacket(fromFsEitherPort(server, exports.REPLY_PORT, exports.DATA_PORT), TIMEOUT_MS);
+    // ACK the metadata — this triggers the FS to dequeue and send the first data block
+    pipe.sendAck(server.station, server.network, metaPkt.port, metaPkt.ctrl, metaPkt.seq);
     const metaResp = parseReply(metaPkt);
     checkOk(metaResp.resultCode, metaResp.data);
     const d = metaResp.data;
@@ -280,10 +282,13 @@ async function load(pipe, server, filename, handles) {
     const size = d[8] + (d[9] << 8) + (d[10] << 16);
     const fnBytes = d.subarray(14, 26);
     const actualFilename = parseAsciiZ(fnBytes) || filename;
-    // Receive data blocks until we have all the bytes, then read final status
+    // Receive data blocks until we have all the bytes, then read final status.
+    // After each packet, send an ACK to trigger the FS to dequeue the next block.
     let fileData = Buffer.alloc(0);
     while (true) {
         const pkt = await pipe.waitForPacket(fromFsEitherPort(server, exports.REPLY_PORT, exports.DATA_PORT), TIMEOUT_MS);
+        // ACK every packet to keep the FS load queue moving
+        pipe.sendAck(server.station, server.network, pkt.port, pkt.ctrl, pkt.seq);
         if (pkt.port === exports.DATA_PORT) {
             fileData = Buffer.concat([fileData, pkt.data]);
             const pct = size > 0 ? Math.round(100 * fileData.length / size) : 100;

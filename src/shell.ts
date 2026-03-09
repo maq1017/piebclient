@@ -183,10 +183,9 @@ export async function runShell(
           // ── CAT ───────────────────────────────────────────────────────────
           case 'cat': {
             const dirPath = args[0] ?? '';
-            const [dirInfo, files] = await Promise.all([
-              readDirInfo(pipe, server, dirPath, handles),
-              examineDir(pipe, server, dirPath, handles),
-            ]);
+            // Sequential — both wait on REPLY_PORT; concurrent would race.
+            const dirInfo = await readDirInfo(pipe, server, dirPath, handles);
+            const files   = await examineDir(pipe, server, dirPath, handles);
             console.log(`[${dirInfo.dirName} (${dirInfo.cycleNum}) - ${dirInfo.isOwner ? 'Owner' : 'Public'}]`);
             for (const f of files) {
               console.log(
@@ -301,6 +300,7 @@ export async function runShell(
       if (passwordResolve) {
         const res = passwordResolve;
         passwordResolve = null;
+        rl.pause(); // keep readline quiet while the async command runs
         res(line);
         return;
       }

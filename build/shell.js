@@ -172,10 +172,9 @@ async function runShell(pipe, initialServer, debug = false) {
                     // ── CAT ───────────────────────────────────────────────────────────
                     case 'cat': {
                         const dirPath = (_d = args[0]) !== null && _d !== void 0 ? _d : '';
-                        const [dirInfo, files] = await Promise.all([
-                            (0, protocol_1.readDirInfo)(pipe, server, dirPath, handles),
-                            (0, protocol_1.examineDir)(pipe, server, dirPath, handles),
-                        ]);
+                        // Sequential — both wait on REPLY_PORT; concurrent would race.
+                        const dirInfo = await (0, protocol_1.readDirInfo)(pipe, server, dirPath, handles);
+                        const files = await (0, protocol_1.examineDir)(pipe, server, dirPath, handles);
                         console.log(`[${dirInfo.dirName} (${dirInfo.cycleNum}) - ${dirInfo.isOwner ? 'Owner' : 'Public'}]`);
                         for (const f of files) {
                             console.log(`${f.name.padEnd(10)} ${f.loadAddress.padEnd(8)} ${f.execAddress.padEnd(8)}` +
@@ -283,6 +282,7 @@ async function runShell(pipe, initialServer, debug = false) {
             if (passwordResolve) {
                 const res = passwordResolve;
                 passwordResolve = null;
+                rl.pause(); // keep readline quiet while the async command runs
                 res(line);
                 return;
             }

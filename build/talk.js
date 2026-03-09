@@ -182,8 +182,6 @@ async function commandTalk(pipe, myName, debug = false) {
         const cleanup = () => {
             closing = true;
             clearInterval(pollInterval);
-            if (process.stdin.isTTY)
-                process.stdin.setRawMode(false);
             process.stdin.pause();
             process.stdin.removeListener('data', onData);
             process.stdout.removeAllListeners('resize');

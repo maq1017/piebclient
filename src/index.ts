@@ -19,7 +19,6 @@ function usage(code = 1): never {
 Usage: piebclient -p <pipeBase> [-s [net.]<stn>] [-d]
 
   -p <pipeBase>     Base path of the named pipes (e.g. /tmp/econet)
-                    Opens <pipeBase>.tobridge and <pipeBase>.frombridge
   -s [net.]<stn>    Default file server station (e.g. 254 or 1.254)
                     Can also be set per-session with "i am <stn> <user>"
   -d                Enable debug packet logging
@@ -84,7 +83,7 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => { pipe.close(); process.exit(0); });
 
   try {
-    process.stderr.write(`Connecting to pipe: ${pipeBase}.{tobridge,frombridge} …\n`);
+    process.stderr.write(`Connecting to pipe: ${pipeBase}\n`);
     await pipe.connect(pipeBase);
     process.stderr.write('Connected.\n');
   } catch (e) {

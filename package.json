@@ -1,0 +1,20 @@
+{
+  "name": "piebclient",
+  "version": "1.0.0",
+  "description": "Interactive Econet file server client via PiEconetBridge named pipe",
+  "bin": {
+    "piebclient": "./build/index.js"
+  },
+  "main": "build/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node build/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

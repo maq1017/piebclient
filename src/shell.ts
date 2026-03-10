@@ -35,7 +35,7 @@ import {
 
 const HELP = `
 Commands:
-  i am [net.]<stn> <user> [pass]   Login to file server (use ":" as pass to prompt)
+  i am [net.]<stn> <user> [pass]   Logon to file server (":" as pass to prompt)
   bye                              Logout from file server
   cat [dir]                        List directory contents
   dir [path]                       Change current directory
@@ -46,7 +46,7 @@ Commands:
   notify [net.]<stn> <message>     Send notification to a station
   cdir <dir>                       Create directory on file server
   access <path> <access>           Set file access permissions
-  delete <path> [-r] [-f]         Delete file(s) from file server
+  delete <path> [-r] [-f]          Delete file(s) from file server
   help                             Show this help
   exit                             Exit
 `;
@@ -92,7 +92,7 @@ export async function runShell(
   let server  = initialServer;
   let handles: DirectoryHandles = { userRoot: 0, current: 0, library: 0 };
 
-  console.log('piebclient ready. Type "help" for commands, "exit" to quit.');
+  console.log('Type "help" for commands, "exit" to quit.');
 
   return new Promise<void>(resolve => {
     let closing           = false;
@@ -236,7 +236,8 @@ export async function runShell(
 
           // ── TALK ──────────────────────────────────────────────────────────
           case 'talk': {
-            const name = args[0] ?? await readLine('Your name: ');
+            const name = (args[0] ?? await readLine('Your name: ')).trim();
+            if (!name) throw new Error('Name is required.');
             rl.pause();
             await commandTalk(pipe, name, debug);
             rl.resume();

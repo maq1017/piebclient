@@ -221,7 +221,9 @@ async function runShell(pipe, initialServer, debug = false) {
                     }
                     // ── TALK ──────────────────────────────────────────────────────────
                     case 'talk': {
-                        const name = (_f = args[0]) !== null && _f !== void 0 ? _f : await readLine('Your name: ');
+                        const name = ((_f = args[0]) !== null && _f !== void 0 ? _f : await readLine('Your name: ')).trim();
+                        if (!name)
+                            throw new Error('Name is required.');
                         rl.pause();
                         await (0, talk_1.commandTalk)(pipe, name, debug);
                         rl.resume();

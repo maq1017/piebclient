@@ -114,8 +114,11 @@ function parseServerReply(data) {
 }
 const HELP = `Commands (prefix with *):
   *A <[net.]stn>  Add a station to the default list
+  *B <num>        Rebroadcast enquiry (0 = reset to default)
   *C <num>        Change channel number
   *H              This help
+  *I <[net.]stn>  Ignore a station (0 to clear)
+  *O <[net.]stn>  Listen only to a station (0 to clear)
   *Q              Quit
   *R <index>      Remove user from default list (use *U to see indices)
   *U              List users on default
@@ -128,6 +131,10 @@ async function commandTalk(pipe, myName, debug = false) {
     let channel = TALK_CHANNEL_DEFAULT;
     let pingCount = MAX_PING_COUNT;
     let lastPingMs = 0;
+    let focusOn = null; // *O
+    let focusNot = null; // *I
+    // Save raw mode state so we can restore it exactly on exit (readline sets raw=true)
+    const wasRaw = process.stdin.isTTY && process.stdin.isRaw === true;
     const findUser = (stn, net) => users.findIndex(u => u.station === stn && u.network === net);
     const addUser = (stn, net, name) => {
         const idx = findUser(stn, net);
@@ -141,6 +148,21 @@ async function commandTalk(pipe, myName, debug = false) {
         return newIdx;
     };
     const fmtStn = (stn, net) => net > 0 ? `${net}.${stn}` : `${stn}`;
+    const parseStn = (arg) => {
+        const parts = arg.split('.');
+        let stn, net;
+        if (parts.length === 2) {
+            net = parseInt(parts[0]);
+            stn = parseInt(parts[1]);
+        }
+        else {
+            net = 0;
+            stn = parseInt(arg);
+        }
+        if (isNaN(stn) || stn < 0)
+            return null;
+        return { station: stn, network: net };
+    };
     // ── Split-screen terminal UI ─────────────────────────────────────────────
     let inputBuffer = '';
     let cursorPos = 0;
@@ -179,11 +201,19 @@ async function commandTalk(pipe, myName, debug = false) {
         let closing = false;
         let currentPoll = Promise.resolve();
         let pollInterval;
+        // Save and remove any existing stdin 'data' listeners (e.g. readline) so
+        // they don't receive our raw keystrokes and fire shell commands.
+        const savedDataListeners = process.stdin.rawListeners('data');
+        process.stdin.removeAllListeners('data');
         const cleanup = () => {
             closing = true;
             clearInterval(pollInterval);
+            if (process.stdin.isTTY)
+                process.stdin.setRawMode(wasRaw);
             process.stdin.pause();
-            process.stdin.removeListener('data', onData);
+            process.stdin.removeAllListeners('data');
+            for (const listener of savedDataListeners)
+                process.stdin.on('data', listener);
             process.stdout.removeAllListeners('resize');
             pipe.debugLog = prevDebugLog;
             restoreTerminal();
@@ -208,22 +238,54 @@ async function commandTalk(pipe, myName, debug = false) {
                 const arg = trimmed.slice(2).trim();
                 switch (cmd) {
                     case 'A': {
-                        const parts = arg.split('.');
-                        let stn, net;
-                        if (parts.length === 2) {
-                            net = parseInt(parts[0]);
-                            stn = parseInt(parts[1]);
-                        }
-                        else {
-                            net = 0;
-                            stn = parseInt(arg);
-                        }
-                        if (!isNaN(stn) && stn > 0) {
-                            addUser(stn, net);
-                            displayMessage(`Added station ${fmtStn(stn, net)}`);
+                        const a = parseStn(arg);
+                        if (a && a.station > 0) {
+                            addUser(a.station, a.network);
+                            displayMessage(`Added station ${fmtStn(a.station, a.network)}`);
                         }
                         else {
                             displayMessage('Usage: *A <[net.]station>');
+                        }
+                        break;
+                    }
+                    case 'B': {
+                        const n = parseInt(arg);
+                        pingCount = (!isNaN(n) && n > 0) ? n : MAX_PING_COUNT;
+                        lastPingMs = Date.now() - PING_INTERVAL_MS;
+                        displayMessage(`Rebroadcasting (${pingCount} enquiries)`);
+                        break;
+                    }
+                    case 'I': {
+                        if (arg === '0' || arg === '') {
+                            focusNot = null;
+                            displayMessage('No longer ignoring any station.');
+                        }
+                        else {
+                            const s = parseStn(arg);
+                            if (s && s.station > 0) {
+                                focusNot = s;
+                                displayMessage(`Ignoring station ${fmtStn(s.station, s.network)}`);
+                            }
+                            else {
+                                displayMessage('Usage: *I <[net.]station>  (0 to clear)');
+                            }
+                        }
+                        break;
+                    }
+                    case 'O': {
+                        if (arg === '0' || arg === '') {
+                            focusOn = null;
+                            displayMessage('Listening to all stations.');
+                        }
+                        else {
+                            const s = parseStn(arg);
+                            if (s && s.station > 0) {
+                                focusOn = s;
+                                displayMessage(`Listening only to station ${fmtStn(s.station, s.network)}`);
+                            }
+                            else {
+                                displayMessage('Usage: *O <[net.]station>  (0 to clear)');
+                            }
                         }
                         break;
                     }
@@ -399,6 +461,17 @@ async function commandTalk(pipe, myName, debug = false) {
                         const { flag, senderName, message } = parsed;
                         if (senderName)
                             addUser(srcstn, srcnet, senderName);
+                        // *I: ignore station
+                        if (focusNot && focusNot.station === srcstn && focusNot.network === srcnet) {
+                            try {
+                                sendTalkMessage(pipe, srcstn, srcnet, '-', myName, 'Not listening', channel);
+                            }
+                            catch ( /* ignore */_g) { /* ignore */ }
+                            return;
+                        }
+                        // *O: listen only to one station
+                        if (focusOn && !(focusOn.station === srcstn && focusOn.network === srcnet))
+                            return;
                         const prefix = senderName ? `${senderName}${flag} ` : '';
                         displayMessage(`${prefix}${message}`);
                     }

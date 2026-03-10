@@ -236,7 +236,8 @@ export async function runShell(
 
           // ── TALK ──────────────────────────────────────────────────────────
           case 'talk': {
-            const name = args[0] ?? await readLine('Your name: ');
+            const name = (args[0] ?? await readLine('Your name: ')).trim();
+            if (!name) throw new Error('Name is required.');
             rl.pause();
             await commandTalk(pipe, name, debug);
             rl.resume();

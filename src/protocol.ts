@@ -73,12 +73,17 @@ function makeFsPayload(
   ]);
 }
 
-/** Send a DATA packet to the file server. */
+/** Send a DATA packet to the file server.
+ * Drains any stale REPLY_PORT packets from previous commands before sending,
+ * so a timed-out command's late-arriving reply can't be consumed by the next
+ * command. */
 function sendToFs(
   pipe: EconetPipe,
   server: EconetAddress,
   data: Buffer,
 ): void {
+  const isStaleReply = fromFs(server, REPLY_PORT);
+  while (pipe.shiftPacket(isStaleReply)) { /* discard */ }
   pipe.send({
     dststn:    server.station,
     dstnet:    server.network,
@@ -90,11 +95,14 @@ function sendToFs(
   });
 }
 
-/** Filter for a reply from the FS on a specific port. */
+/** Filter for a reply from the FS on a specific port.
+ * Accepts srcnet=0 (local network) as equivalent to the server's specified
+ * network, because BBC file servers often reply from network 0 regardless of
+ * how they were addressed. */
 function fromFs(server: EconetAddress, port: number) {
   return (p: AUNPacket) =>
     p.srcstn === server.station &&
-    p.srcnet === server.network &&
+    (p.srcnet === server.network || (server.network !== 0 && p.srcnet === 0)) &&
     p.port   === port;
 }
 

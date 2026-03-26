@@ -145,7 +145,7 @@ export async function executeCliCommand(
   return resp.data;
 }
 
-/** *I AM — login.  Returns updated directory handles. */
+/** *I AM — logon.  Returns updated directory handles. */
 export async function iAm(
   pipe:     EconetPipe,
   server:   EconetAddress,
@@ -155,7 +155,7 @@ export async function iAm(
   const cmd  = password ? `I AM ${username} ${password}` : `I AM ${username}`;
   const data = await executeCliCommand(pipe, server, cmd, { userRoot: 0, current: 0, library: 0 });
 
-  if (data.length < 4) throw new Error('Malformed login response');
+  if (data.length < 4) throw new Error('Malformed logon response');
   return {
     current:  data[0]!,
     userRoot: data[1]!,

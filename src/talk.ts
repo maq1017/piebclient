@@ -217,6 +217,10 @@ export async function commandTalk(pipe: EconetPipe, myName: string, debug = fals
 
   lastPingMs = Date.now() - PING_INTERVAL_MS;
 
+  // Ensure terminal is restored even if the process is killed externally (e.g. SIGINT)
+  const handleProcessExit = () => restoreTerminal();
+  process.on('exit', handleProcessExit);
+
   return new Promise<void>(resolve => {
     let closing = false;
     let currentPoll: Promise<void> = Promise.resolve();
@@ -230,6 +234,8 @@ export async function commandTalk(pipe: EconetPipe, myName: string, debug = fals
     const cleanup = () => {
       closing = true;
       clearInterval(pollInterval);
+      pipe.onDisconnect = undefined;
+      process.removeListener('exit', handleProcessExit);
       if (process.stdin.isTTY) process.stdin.setRawMode(wasRaw);
       process.stdin.pause();
       process.stdin.removeAllListeners('data');
@@ -238,6 +244,13 @@ export async function commandTalk(pipe: EconetPipe, myName: string, debug = fals
       pipe.debugLog = prevDebugLog;
       restoreTerminal();
       void currentPoll.then(resolve);
+    };
+
+    pipe.onDisconnect = () => {
+      if (!closing) {
+        displayMessage('[Bridge pipe disconnected]');
+        cleanup();
+      }
     };
 
     const sendToAll = (flag: string, message: string): void => {

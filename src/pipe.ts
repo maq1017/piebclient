@@ -54,6 +54,9 @@ export class EconetPipe {
   /** Optional debug callback — set to enable packet logging. */
   debugLog?: (direction: 'TX' | 'RX', pkt: AUNPacket) => void;
 
+  /** Called when the pipe is detected to have disconnected (EOF or read error). */
+  onDisconnect?: () => void;
+
   // ── Connection ────────────────────────────────────────────────────────────
 
   async connect(pipeBase: string): Promise<void> {
@@ -175,6 +178,12 @@ export class EconetPipe {
       try {
         const buf = Buffer.alloc(65536);
         const n   = fs.readSync(this.readFd, buf, 0, buf.length, null);
+        if (n === 0) {
+          // EOF — bridge has closed its write end
+          this.running = false;
+          this.onDisconnect?.();
+          return;
+        }
         if (n > 0) {
           this.recvBuf = Buffer.concat([this.recvBuf, buf.subarray(0, n)]);
           this.parseBuffer();
@@ -183,6 +192,9 @@ export class EconetPipe {
         const err = e as NodeJS.ErrnoException;
         if (err.code !== 'EAGAIN' && err.code !== 'EWOULDBLOCK') {
           process.stderr.write(`Pipe read error: ${err.message}\n`);
+          this.running = false;
+          this.onDisconnect?.();
+          return;
         }
       }
       setTimeout(poll, 5);
